@@ -17,7 +17,7 @@ def quality_control(formatted_dialogue, criteria):
     """
 
     qc_response = openai.ChatCompletion.create(
-        model="gpt-4",
+        model="gpt-4o",
         messages=[
             {"role": "user", "content": qc_prompt}
         ],
