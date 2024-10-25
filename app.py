@@ -15,7 +15,7 @@ import tempfile
 def reset_session_state():
     for key in ['transcription', 'formatted_dialogue', 'qc_analysis', 'average_score',
                 'manager_errors', 'manager_recommendations', 'client_questions',
-                'save_success', 'processing_steps']:
+                'save_success', 'analysis_started']:
         if key in st.session_state:
             del st.session_state[key]
 
@@ -65,27 +65,25 @@ if st.session_state['access_granted']:
                 tmp_file_path = tmp_file.name
             st.session_state['tmp_file_path'] = tmp_file_path
             st.session_state['file_name'] = audio_file.name
-            st.session_state['processing_steps'] = []
 
     if st.session_state.get('analysis_started', False):
-        # Инициализируем списки для вкладок и их содержимого
-        tab_names = ["Транскрипция", "Диалог", "Анализ качества и оценки",
-                     "Ошибки менеджера", "Рекомендации", "Вопросы клиента"]
-        tab_contents = {}
-
         # Выполняем транскрипцию
-        if 'transcription' not in st.session_state:
-            with st.spinner("Транскрибируем аудио..."):
-                transcription = transcribe_audio(st.session_state['tmp_file_path'])
-                st.session_state['transcription'] = transcription
-                st.session_state['processing_steps'].append("Транскрипция")
+        with st.spinner("Транскрибируем аудио..."):
+            transcription = transcribe_audio(st.session_state['tmp_file_path'])
+            st.session_state['transcription'] = transcription
+
+        # Отображаем транскрипцию под спойлером
+        with st.expander("Транскрипция"):
+            st.write(st.session_state['transcription'])
 
         # Форматируем диалог
-        if 'formatted_dialogue' not in st.session_state:
-            with st.spinner("Форматируем диалог..."):
-                formatted_dialogue = format_dialogue(st.session_state['transcription'])
-                st.session_state['formatted_dialogue'] = formatted_dialogue
-                st.session_state['processing_steps'].append("Диалог")
+        with st.spinner("Форматируем диалог..."):
+            formatted_dialogue = format_dialogue(st.session_state['transcription'])
+            st.session_state['formatted_dialogue'] = formatted_dialogue
+
+        # Отображаем диалог под спойлером
+        with st.expander("Диалог"):
+            st.write(st.session_state['formatted_dialogue'])
             
             # Критерии оценки
             criteria = """
@@ -106,81 +104,64 @@ if st.session_state['access_granted']:
             """
 
         # Контроль качества
-        if 'qc_analysis' not in st.session_state:
-            with st.spinner("Проводим контроль качества..."):
-                qc_analysis, scores = quality_control(st.session_state['formatted_dialogue'], criteria)
-                average_score = sum(scores) / len(scores) if scores else 0
-                st.session_state['qc_analysis'] = qc_analysis
-                st.session_state['average_score'] = average_score
-                st.session_state['processing_steps'].append("Анализ качества и оценки")
+        with st.spinner("Проводим контроль качества..."):
+            qc_analysis, scores = quality_control(st.session_state['formatted_dialogue'], criteria)
+            average_score = sum(scores) / len(scores) if scores else 0
+            st.session_state['qc_analysis'] = qc_analysis
+            st.session_state['average_score'] = average_score
 
-        # Определение ошибок
-        if 'manager_errors' not in st.session_state:
-            with st.spinner("Определяем ошибки менеджера..."):
-                manager_errors = detect_errors(st.session_state['formatted_dialogue'])
-                st.session_state['manager_errors'] = manager_errors
-                st.session_state['processing_steps'].append("Ошибки менеджера")
+        # Отображаем анализ качества под спойлером
+        with st.expander("Анализ качества и оценки"):
+            st.write(st.session_state['qc_analysis'])
+            st.write(f"**Средний балл:** {st.session_state['average_score']:.2f}")
 
-        # Рекомендации
-        if 'manager_recommendations' not in st.session_state:
-            with st.spinner("Формируем рекомендации..."):
-                manager_recommendations = generate_recommendations(st.session_state['formatted_dialogue'])
-                st.session_state['manager_recommendations'] = manager_recommendations
-                st.session_state['processing_steps'].append("Рекомендации")
+        # Определяем ошибки менеджера
+        with st.spinner("Определяем ошибки менеджера..."):
+            manager_errors = detect_errors(st.session_state['formatted_dialogue'])
+            st.session_state['manager_errors'] = manager_errors
 
-        # Вопросы клиента
-        if 'client_questions' not in st.session_state:
-            with st.spinner("Извлекаем вопросы клиента..."):
-                client_questions = extract_client_questions(st.session_state['formatted_dialogue'])
-                st.session_state['client_questions'] = client_questions
-                st.session_state['processing_steps'].append("Вопросы клиента")
+        # Отображаем ошибки менеджера под спойлером
+        with st.expander("Ошибки менеджера"):
+            st.write(st.session_state['manager_errors'])
 
-        # Сохранение данных в Google Таблицу
-        if 'save_success' not in st.session_state:
-            with st.spinner("Сохраняем данные в Google Таблицу..."):
-                success = save_to_google_sheets(
-                    file_name=st.session_state['file_name'],
-                    transcription=st.session_state['transcription'],
-                    call_evaluation=st.session_state['qc_analysis'],
-                    average_score=st.session_state['average_score'],
-                    manager_errors=st.session_state['manager_errors'],
-                    improvement_recommendations=st.session_state['manager_recommendations'],
-                    client_questions=st.session_state['client_questions']
-                )
-                st.session_state['save_success'] = success
+        # Генерируем рекомендации
+        with st.spinner("Формируем рекомендации..."):
+            manager_recommendations = generate_recommendations(st.session_state['formatted_dialogue'])
+            st.session_state['manager_recommendations'] = manager_recommendations
 
-        # Отображение вкладок по мере готовности
-        ready_tabs = st.session_state['processing_steps']
-        if ready_tabs:
-            tab_labels = [f"🟢 {tab}" for tab in ready_tabs]
-            tabs = st.tabs(tab_labels)
-            for i, tab_name in enumerate(ready_tabs):
-                with tabs[i]:
-                    st.subheader(tab_name)
-                    if tab_name == "Транскрипция":
-                        st.write(st.session_state['transcription'])
-                    elif tab_name == "Диалог":
-                        st.write(st.session_state['formatted_dialogue'])
-                    elif tab_name == "Анализ качества и оценки":
-                        st.write(st.session_state['qc_analysis'])
-                        st.write(f"**Средний балл:** {st.session_state['average_score']:.2f}")
-                    elif tab_name == "Ошибки менеджера":
-                        st.write(st.session_state['manager_errors'])
-                    elif tab_name == "Рекомендации":
-                        st.write(st.session_state['manager_recommendations'])
-                    elif tab_name == "Вопросы клиента":
-                        st.write(st.session_state['client_questions'])
+        # Отображаем рекомендации под спойлером
+        with st.expander("Рекомендации"):
+            st.write(st.session_state['manager_recommendations'])
+
+        # Извлекаем вопросы клиента
+        with st.spinner("Извлекаем вопросы клиента..."):
+            client_questions = extract_client_questions(st.session_state['formatted_dialogue'])
+            st.session_state['client_questions'] = client_questions
+
+        # Отображаем вопросы клиента под спойлером
+        with st.expander("Вопросы клиента"):
+            st.write(st.session_state['client_questions'])
+
+        # Сохраняем данные в Google Таблицу
+        with st.spinner("Сохраняем данные в Google Таблицу..."):
+            success = save_to_google_sheets(
+                file_name=st.session_state['file_name'],
+                transcription=st.session_state['transcription'],
+                call_evaluation=st.session_state['qc_analysis'],
+                average_score=st.session_state['average_score'],
+                manager_errors=st.session_state['manager_errors'],
+                improvement_recommendations=st.session_state['manager_recommendations'],
+                client_questions=st.session_state['client_questions']
+            )
+            st.session_state['save_success'] = success
 
         # Отображение уведомления о сохранении данных
-        if st.session_state.get('save_success') is not None:
-            if st.session_state['save_success']:
-                st.success("Данные успешно сохранены в Google Таблицу.")
-            else:
-                st.error("Не удалось сохранить данные в Google Таблицу.")
+        if st.session_state['save_success']:
+            st.success("Данные успешно сохранены в Google Таблицу.")
+        else:
+            st.error("Не удалось сохранить данные в Google Таблицу.")
 
-        # Если обработка завершена, предлагаем возможность начать заново
-        if st.session_state.get('save_success') is not None:
-            if st.button("Анализировать другой файл"):
-                reset_session_state()
-                st.session_state['analysis_started'] = False
-                st.experimental_rerun()
+        # Предлагаем проанализировать другой файл
+        if st.button("Анализировать другой файл"):
+            reset_session_state()
+            st.experimental_rerun()
