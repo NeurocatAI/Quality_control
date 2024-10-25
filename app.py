@@ -23,19 +23,21 @@ if not st.session_state['access_granted']:
     with st.form(key='pin_form'):
         pin = st.text_input("Введите PIN для доступа", type="password")
         submit_button = st.form_submit_button("Войти")
-        if submit_button:
-            if pin == USER_PIN:
-                st.session_state['access_granted'] = True
-                st.success("Доступ разрешен")
-                # Перезапускаем приложение, чтобы отобразить остальной код
-                st.experimental_rerun()
-            else:
-                st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
-                # Останавливаем выполнение, чтобы не показывать остальной код
-                st.stop()
-    # Останавливаем выполнение, пока форма не отправлена
-    st.stop()
-else:
+    if submit_button:
+        if pin == USER_PIN:
+            st.session_state['access_granted'] = True
+            st.success("Доступ разрешен")
+            # Нет необходимости вызывать st.experimental_rerun()
+        else:
+            st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
+            # Останавливаем выполнение, чтобы не показывать остальной код
+            st.stop()
+    else:
+        # Останавливаем выполнение, пока форма не отправлена
+        st.stop()
+
+# Если доступ предоставлен, показываем остальную часть приложения
+if st.session_state['access_granted']:
     # Остальной код приложения
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
