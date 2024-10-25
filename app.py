@@ -24,7 +24,7 @@ if not st.session_state['access_granted']:
         if pin == USER_PIN:
             st.session_state['access_granted'] = True
             st.success("Доступ разрешен")
-            st.experimental.rerun()  # Перезапускаем приложение
+            st.experimental_rerun()  # Перезапускаем приложение
         else:
             st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
             st.stop()
