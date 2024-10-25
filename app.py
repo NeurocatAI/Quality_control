@@ -37,7 +37,7 @@ audio_file = st.file_uploader("Загрузите аудиофайл", type=["mp
 if audio_file is not None:
     if st.button("Начать анализ"):
         # Сохраняем загруженный файл во временной директории
-        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
             tmp_file.write(audio_file.read())
             tmp_file_path = tmp_file.name
         
