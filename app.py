@@ -11,6 +11,18 @@ from utils.client_questions import extract_client_questions
 from utils.save_to_google_sheets import save_to_google_sheets
 import tempfile
 
+# Функция для сброса состояния сессии
+def reset_session_state():
+    st.session_state['transcription'] = None
+    st.session_state['formatted_dialogue'] = None
+    st.session_state['qc_analysis'] = None
+    st.session_state['average_score'] = None
+    st.session_state['manager_errors'] = None
+    st.session_state['manager_recommendations'] = None
+    st.session_state['client_questions'] = None
+    st.session_state['processing_step'] = None
+    st.session_state['save_success'] = None
+
 # Получение PIN-кода и ключа API из секретов
 USER_PIN = st.secrets["USER_PIN"]
 
@@ -35,10 +47,8 @@ if not st.session_state['access_granted']:
 
 # Если доступ предоставлен, показываем остальную часть приложения
 if st.session_state['access_granted']:
-    # Остальной код приложения
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-
     # Установка API-ключа
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
     openai.api_key = OPENAI_API_KEY
 
     st.title("Анализ звонков менеджеров")
@@ -46,37 +56,47 @@ if st.session_state['access_granted']:
     # Загрузка аудиофайла
     audio_file = st.file_uploader("Загрузите аудиофайл", type=["mp3", "wav", "m4a"])
 
+    if 'analysis_started' not in st.session_state:
+        st.session_state['analysis_started'] = False
+
     if audio_file is not None:
         if st.button("Начать анализ"):
+            reset_session_state()
+            st.session_state['analysis_started'] = True
             # Сохраняем загруженный файл во временной директории
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
                 tmp_file.write(audio_file.read())
                 tmp_file_path = tmp_file.name
+            st.session_state['tmp_file_path'] = tmp_file_path
+            st.session_state['file_name'] = audio_file.name
+            st.session_state['processing_step'] = 'transcription'
 
-            # Получаем имя файла
-            file_name = audio_file.name
+    if st.session_state.get('analysis_started', False):
+        # Список вкладок и их статусы
+        tabs = []
+        tab_contents = {}
 
-            # Инициализация статусов вкладок
-            tab_statuses = {
-                "Транскрипция": "in_progress",
-                "Диалог": "not_started",
-                "Анализ качества и оценки": "not_started",
-                "Ошибки менеджера": "not_started",
-                "Рекомендации": "not_started",
-                "Вопросы клиента": "not_started"
-            }
-
-            # Выполняем транскрипцию
+        # Выполняем транскрипцию
+        if st.session_state['processing_step'] == 'transcription':
             with st.spinner("Транскрибируем аудио..."):
-                transcription = transcribe_audio(tmp_file_path)
-                tab_statuses["Транскрипция"] = "completed"
-                tab_statuses["Диалог"] = "in_progress"
+                transcription = transcribe_audio(st.session_state['tmp_file_path'])
+                st.session_state['transcription'] = transcription
+                st.session_state['processing_step'] = 'format_dialogue'
 
-            # Форматируем диалог
+        if st.session_state.get('transcription'):
+            tabs.append("Транскрипция")
+            tab_contents["Транскрипция"] = st.session_state['transcription']
+
+        # Форматируем диалог
+        if st.session_state['processing_step'] == 'format_dialogue':
             with st.spinner("Форматируем диалог..."):
-                formatted_dialogue = format_dialogue(transcription)
-                tab_statuses["Диалог"] = "completed"
-                tab_statuses["Анализ качества и оценки"] = "in_progress"
+                formatted_dialogue = format_dialogue(st.session_state['transcription'])
+                st.session_state['formatted_dialogue'] = formatted_dialogue
+                st.session_state['processing_step'] = 'quality_control'
+
+        if st.session_state.get('formatted_dialogue'):
+            tabs.append("Диалог")
+            tab_contents["Диалог"] = st.session_state['formatted_dialogue']
             
             # Критерии оценки
             criteria = """
@@ -96,80 +116,93 @@ if st.session_state['access_granted']:
             13. Упомянул ли менеджер партнерскую программу. Оценка "1" - да, партнерская программа упомянута, оценка "0" - нет, программа не упомянута.
             """
 
-           # Контроль качества
+        # Контроль качества
+        if st.session_state['processing_step'] == 'quality_control':
             with st.spinner("Проводим контроль качества..."):
-                qc_analysis, scores = quality_control(formatted_dialogue, criteria)
+                qc_analysis, scores = quality_control(st.session_state['formatted_dialogue'], criteria)
                 average_score = sum(scores) / len(scores) if scores else 0
-                tab_statuses["Анализ качества и оценки"] = "completed"
-                tab_statuses["Ошибки менеджера"] = "in_progress"
+                st.session_state['qc_analysis'] = qc_analysis
+                st.session_state['average_score'] = average_score
+                st.session_state['processing_step'] = 'detect_errors'
 
-            # Определение ошибок
+        if st.session_state.get('qc_analysis'):
+            tabs.append("Анализ качества и оценки")
+            tab_contents["Анализ качества и оценки"] = {
+                "qc_analysis": st.session_state['qc_analysis'],
+                "average_score": st.session_state['average_score']
+            }
+
+        # Определение ошибок
+        if st.session_state['processing_step'] == 'detect_errors':
             with st.spinner("Определяем ошибки менеджера..."):
-                manager_errors = detect_errors(formatted_dialogue)
-                tab_statuses["Ошибки менеджера"] = "completed"
-                tab_statuses["Рекомендации"] = "in_progress"
+                manager_errors = detect_errors(st.session_state['formatted_dialogue'])
+                st.session_state['manager_errors'] = manager_errors
+                st.session_state['processing_step'] = 'generate_recommendations'
 
-            # Рекомендации
+        if st.session_state.get('manager_errors'):
+            tabs.append("Ошибки менеджера")
+            tab_contents["Ошибки менеджера"] = st.session_state['manager_errors']
+
+        # Рекомендации
+        if st.session_state['processing_step'] == 'generate_recommendations':
             with st.spinner("Формируем рекомендации..."):
-                manager_recommendations = generate_recommendations(formatted_dialogue)
-                tab_statuses["Рекомендации"] = "completed"
-                tab_statuses["Вопросы клиента"] = "in_progress"
+                manager_recommendations = generate_recommendations(st.session_state['formatted_dialogue'])
+                st.session_state['manager_recommendations'] = manager_recommendations
+                st.session_state['processing_step'] = 'extract_client_questions'
 
-            # Вопросы клиента
+        if st.session_state.get('manager_recommendations'):
+            tabs.append("Рекомендации")
+            tab_contents["Рекомендации"] = st.session_state['manager_recommendations']
+
+        # Вопросы клиента
+        if st.session_state['processing_step'] == 'extract_client_questions':
             with st.spinner("Извлекаем вопросы клиента..."):
-                client_questions = extract_client_questions(formatted_dialogue)
-                tab_statuses["Вопросы клиента"] = "completed"
+                client_questions = extract_client_questions(st.session_state['formatted_dialogue'])
+                st.session_state['client_questions'] = client_questions
+                st.session_state['processing_step'] = 'save_to_google_sheets'
 
-            # Сохраняем данные в Google Таблицу
+        if st.session_state.get('client_questions'):
+            tabs.append("Вопросы клиента")
+            tab_contents["Вопросы клиента"] = st.session_state['client_questions']
+
+        # Сохранение данных в Google Таблицу
+        if st.session_state['processing_step'] == 'save_to_google_sheets':
             with st.spinner("Сохраняем данные в Google Таблицу..."):
                 success = save_to_google_sheets(
-                    file_name=file_name,
-                    transcription=transcription,
-                    call_evaluation=qc_analysis,
-                    average_score=average_score,
-                    manager_errors=manager_errors,
-                    improvement_recommendations=manager_recommendations,
-                    client_questions=client_questions
+                    file_name=st.session_state['file_name'],
+                    transcription=st.session_state['transcription'],
+                    call_evaluation=st.session_state['qc_analysis'],
+                    average_score=st.session_state['average_score'],
+                    manager_errors=st.session_state['manager_errors'],
+                    improvement_recommendations=st.session_state['manager_recommendations'],
+                    client_questions=st.session_state['client_questions']
                 )
+                st.session_state['save_success'] = success
+                st.session_state['processing_step'] = 'completed'
 
-            # Обновляем названия вкладок с учетом статусов
-            status_emojis = {
-                "completed": "🟢",
-                "in_progress": "🔵",
-                "not_started": "⚪"
-            }
-            tab_labels = [f"{status_emojis[tab_statuses[tab]]} {tab}" for tab in tab_statuses]
+        # Отображение вкладок по мере готовности
+        if tabs:
+            tab_objects = st.tabs(tabs)
+            for i, tab_name in enumerate(tabs):
+                with tab_objects[i]:
+                    st.subheader(tab_name)
+                    content = tab_contents[tab_name]
+                    if tab_name == "Анализ качества и оценки":
+                        st.write(content['qc_analysis'])
+                        st.write(f"**Средний балл:** {content['average_score']:.2f}")
+                    else:
+                        st.write(content)
 
-            # Создаем вкладки
-            tabs = st.tabs(tab_labels)
+        # Отображение уведомления о сохранении данных
+        if st.session_state.get('save_success') is not None:
+            if st.session_state['save_success']:
+                st.success("Данные успешно сохранены в Google Таблицу.")
+            else:
+                st.error("Не удалось сохранить данные в Google Таблицу.")
 
-            # Отображаем содержимое в каждой вкладке
-            with tabs[0]:
-                st.subheader("Транскрипция")
-                st.write(transcription)
-
-            with tabs[1]:
-                st.subheader("Диалог")
-                st.write(formatted_dialogue)
-
-            with tabs[2]:
-                st.subheader("Анализ качества и оценки")
-                st.write(qc_analysis)
-                st.write(f"**Средний балл:** {average_score:.2f}")
-
-            with tabs[3]:
-                st.subheader("Ошибки менеджера")
-                st.write(manager_errors)
-
-            with tabs[4]:
-                st.subheader("Рекомендации")
-                st.write(manager_recommendations)
-
-            with tabs[5]:
-                st.subheader("Вопросы клиента")
-                st.write(client_questions)
-                # Размещаем уведомление о сохранении данных
-                if success:
-                    st.success("Данные успешно сохранены в Google Таблицу.")
-                else:
-                    st.error("Не удалось сохранить данные в Google Таблицу.")
+        # Если обработка завершена, предлагаем возможность начать заново
+        if st.session_state['processing_step'] == 'completed':
+            if st.button("Анализировать другой файл"):
+                reset_session_state()
+                st.session_state['analysis_started'] = False
+                st.experimental_rerun()
