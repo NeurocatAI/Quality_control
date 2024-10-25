@@ -25,6 +25,7 @@ if pin != USER_PIN:
     st.stop()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+st.write(f"Загруженный API-ключ: {OPENAI_API_KEY[:8]}...")  # Покажет первые 8 символов ключа
 
 # Установка API-ключа
 openai.api_key = OPENAI_API_KEY
