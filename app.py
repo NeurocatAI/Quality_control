@@ -13,8 +13,7 @@ from utils.client_questions import extract_client_questions
 import tempfile
 
 # Получение PIN-кода и ключа API из секретов
-USER_PIN = os.getenv("USER_PIN")
-
+USER_PIN = st.secrets["USER_PIN"]
 
 # Запрос PIN-кода у пользователя
 pin = st.text_input("Введите PIN для доступа", type="password")
@@ -24,7 +23,7 @@ if pin != USER_PIN:
     st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
     st.stop()
 
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 st.write(f"Загруженный API-ключ: {OPENAI_API_KEY[:18]}...")  # Покажет первые 8 символов ключа
 
 # Установка API-ключа
