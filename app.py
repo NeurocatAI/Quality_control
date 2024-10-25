@@ -2,6 +2,7 @@
 import streamlit as st
 import openai
 import os
+import uuid
 from utils.transcription import transcribe_audio
 from utils.dialogue_formatting import format_dialogue
 from utils.quality_control import quality_control
@@ -24,19 +25,13 @@ if not st.session_state['access_granted']:
         if pin == USER_PIN:
             st.session_state['access_granted'] = True
             st.success("Доступ разрешен")
-            # Используем st.experimental_set_query_params для обновления состояния без перезагрузки
-            st.experimental_set_query_params(access_granted='true')
-            # Очищаем поле ввода PIN-кода
-            st.empty()
-            # Выводим пустой разделитель
-            st.write('')
+            st.experimental_rerun()
         else:
             st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
             st.stop()
     else:
         st.stop()
-
-if st.session_state['access_granted']:
+else:
     # Остальной код приложения
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 
@@ -50,6 +45,9 @@ if st.session_state['access_granted']:
 
     if audio_file is not None:
         if st.button("Начать анализ"):
+            # Генерируем уникальный идентификатор для данной обработки
+            unique_id = str(uuid.uuid4())
+
             # Сохраняем загруженный файл во временной директории
             with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_file:
                 tmp_file.write(audio_file.read())
@@ -58,8 +56,14 @@ if st.session_state['access_granted']:
             # Получаем имя файла
             file_name = audio_file.name
 
-            # Сохранение имени файла в Google Таблицу (инициализация записи)
-            save_to_google_sheets(file_name=file_name)
+            # Инициализация записи в Google Таблице
+            success = save_to_google_sheets(
+                unique_id=unique_id,
+                file_name=file_name
+            )
+            if not success:
+                st.error("Не удалось инициализировать запись в Google Таблице.")
+                st.stop()
 
             # Транскрибирование аудио
             with st.spinner("Транскрибируем аудио..."):
@@ -71,6 +75,7 @@ if st.session_state['access_granted']:
             # Сохранение транскрипции
             with st.spinner("Сохраняем транскрипцию..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     transcription=transcription
                 )
@@ -89,6 +94,7 @@ if st.session_state['access_granted']:
             # Сохранение диалога
             with st.spinner("Сохраняем диалог..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     dialogue=formatted_dialogue
                 )
@@ -131,6 +137,7 @@ if st.session_state['access_granted']:
             # Сохранение оценки звонка и средней оценки
             with st.spinner("Сохраняем оценку звонка..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     call_evaluation=qc_analysis,
                     average_score=average_score
@@ -150,6 +157,7 @@ if st.session_state['access_granted']:
             # Сохранение ошибок менеджера
             with st.spinner("Сохраняем ошибки менеджера..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     manager_errors=manager_errors
                 )
@@ -168,6 +176,7 @@ if st.session_state['access_granted']:
             # Сохранение рекомендаций
             with st.spinner("Сохраняем рекомендации..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     improvement_recommendations=manager_recommendations
                 )
@@ -186,6 +195,7 @@ if st.session_state['access_granted']:
             # Сохранение вопросов клиента
             with st.spinner("Сохраняем вопросы клиента..."):
                 success = save_to_google_sheets(
+                    unique_id=unique_id,
                     file_name=file_name,
                     client_questions=client_questions
                 )
@@ -193,3 +203,4 @@ if st.session_state['access_granted']:
                     st.success("Вопросы клиента сохранены в Google Таблицу.")
                 else:
                     st.error("Не удалось сохранить вопросы клиента.")
+            

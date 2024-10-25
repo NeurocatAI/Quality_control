@@ -2,6 +2,7 @@
 import requests
 
 def save_to_google_sheets(
+    unique_id,
     file_name,
     transcription=None,
     dialogue=None,
@@ -11,8 +12,9 @@ def save_to_google_sheets(
     improvement_recommendations=None,
     client_questions=None
 ):
-    url = 'https://script.google.com/macros/s/AKfycbzCkT2sYTvXhBZL4NAy5Cj-ZhZFMOcc70Hz7eICUTkzY-Q3Bebr196CRSd8AcN-LWc/exec'
+    url = 'https://script.google.com/macros/s/your_script_url/exec'
     data = {
+        'unique_id': unique_id,
         'file_name': file_name,
         'transcription': transcription,
         'dialogue': dialogue,
