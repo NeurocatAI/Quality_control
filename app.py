@@ -1,4 +1,4 @@
-# app.py 
+# app.py
 import streamlit as st
 import openai
 import os
@@ -22,6 +22,7 @@ def reset_session_state():
     st.session_state['client_questions'] = None
     st.session_state['processing_step'] = None
     st.session_state['save_success'] = None
+    st.session_state['tabs_ready'] = []
 
 # Получение PIN-кода и ключа API из секретов
 USER_PIN = st.secrets["USER_PIN"]
@@ -70,11 +71,11 @@ if st.session_state['access_granted']:
             st.session_state['tmp_file_path'] = tmp_file_path
             st.session_state['file_name'] = audio_file.name
             st.session_state['processing_step'] = 'transcription'
+            st.experimental_rerun()
 
     if st.session_state.get('analysis_started', False):
-        # Список вкладок и их статусы
-        tabs = []
-        tab_contents = {}
+        # Создаем заполнитель для вкладок
+        tabs_placeholder = st.empty()
 
         # Выполняем транскрипцию
         if st.session_state['processing_step'] == 'transcription':
@@ -82,10 +83,8 @@ if st.session_state['access_granted']:
                 transcription = transcribe_audio(st.session_state['tmp_file_path'])
                 st.session_state['transcription'] = transcription
                 st.session_state['processing_step'] = 'format_dialogue'
-
-        if st.session_state.get('transcription'):
-            tabs.append("Транскрипция")
-            tab_contents["Транскрипция"] = st.session_state['transcription']
+                st.session_state['tabs_ready'].append("Транскрипция")
+                st.experimental_rerun()
 
         # Форматируем диалог
         if st.session_state['processing_step'] == 'format_dialogue':
@@ -93,10 +92,8 @@ if st.session_state['access_granted']:
                 formatted_dialogue = format_dialogue(st.session_state['transcription'])
                 st.session_state['formatted_dialogue'] = formatted_dialogue
                 st.session_state['processing_step'] = 'quality_control'
-
-        if st.session_state.get('formatted_dialogue'):
-            tabs.append("Диалог")
-            tab_contents["Диалог"] = st.session_state['formatted_dialogue']
+                st.session_state['tabs_ready'].append("Диалог")
+                st.experimental_rerun()
             
             # Критерии оценки
             criteria = """
@@ -124,13 +121,8 @@ if st.session_state['access_granted']:
                 st.session_state['qc_analysis'] = qc_analysis
                 st.session_state['average_score'] = average_score
                 st.session_state['processing_step'] = 'detect_errors'
-
-        if st.session_state.get('qc_analysis'):
-            tabs.append("Анализ качества и оценки")
-            tab_contents["Анализ качества и оценки"] = {
-                "qc_analysis": st.session_state['qc_analysis'],
-                "average_score": st.session_state['average_score']
-            }
+                st.session_state['tabs_ready'].append("Анализ качества и оценки")
+                st.experimental_rerun()
 
         # Определение ошибок
         if st.session_state['processing_step'] == 'detect_errors':
@@ -138,10 +130,8 @@ if st.session_state['access_granted']:
                 manager_errors = detect_errors(st.session_state['formatted_dialogue'])
                 st.session_state['manager_errors'] = manager_errors
                 st.session_state['processing_step'] = 'generate_recommendations'
-
-        if st.session_state.get('manager_errors'):
-            tabs.append("Ошибки менеджера")
-            tab_contents["Ошибки менеджера"] = st.session_state['manager_errors']
+                st.session_state['tabs_ready'].append("Ошибки менеджера")
+                st.experimental_rerun()
 
         # Рекомендации
         if st.session_state['processing_step'] == 'generate_recommendations':
@@ -149,10 +139,8 @@ if st.session_state['access_granted']:
                 manager_recommendations = generate_recommendations(st.session_state['formatted_dialogue'])
                 st.session_state['manager_recommendations'] = manager_recommendations
                 st.session_state['processing_step'] = 'extract_client_questions'
-
-        if st.session_state.get('manager_recommendations'):
-            tabs.append("Рекомендации")
-            tab_contents["Рекомендации"] = st.session_state['manager_recommendations']
+                st.session_state['tabs_ready'].append("Рекомендации")
+                st.experimental_rerun()
 
         # Вопросы клиента
         if st.session_state['processing_step'] == 'extract_client_questions':
@@ -160,10 +148,8 @@ if st.session_state['access_granted']:
                 client_questions = extract_client_questions(st.session_state['formatted_dialogue'])
                 st.session_state['client_questions'] = client_questions
                 st.session_state['processing_step'] = 'save_to_google_sheets'
-
-        if st.session_state.get('client_questions'):
-            tabs.append("Вопросы клиента")
-            tab_contents["Вопросы клиента"] = st.session_state['client_questions']
+                st.session_state['tabs_ready'].append("Вопросы клиента")
+                st.experimental_rerun()
 
         # Сохранение данных в Google Таблицу
         if st.session_state['processing_step'] == 'save_to_google_sheets':
@@ -179,19 +165,29 @@ if st.session_state['access_granted']:
                 )
                 st.session_state['save_success'] = success
                 st.session_state['processing_step'] = 'completed'
+                st.experimental_rerun()
 
         # Отображение вкладок по мере готовности
-        if tabs:
-            tab_objects = st.tabs(tabs)
-            for i, tab_name in enumerate(tabs):
-                with tab_objects[i]:
-                    st.subheader(tab_name)
-                    content = tab_contents[tab_name]
-                    if tab_name == "Анализ качества и оценки":
-                        st.write(content['qc_analysis'])
-                        st.write(f"**Средний балл:** {content['average_score']:.2f}")
-                    else:
-                        st.write(content)
+        if st.session_state.get('tabs_ready'):
+            # Обновляем названия вкладок с зелеными обозначениями
+            tab_labels = [f"🟢 {tab}" for tab in st.session_state['tabs_ready']]
+            tabs = tabs_placeholder.tabs(tab_labels)
+            for i, tab_name in enumerate(st.session_state['tabs_ready']):
+                with tabs[i]:
+                    st.subheader(tab_name.strip("🟢 "))
+                    if tab_name.strip("🟢 ") == "Транскрипция":
+                        st.write(st.session_state['transcription'])
+                    elif tab_name.strip("🟢 ") == "Диалог":
+                        st.write(st.session_state['formatted_dialogue'])
+                    elif tab_name.strip("🟢 ") == "Анализ качества и оценки":
+                        st.write(st.session_state['qc_analysis'])
+                        st.write(f"**Средний балл:** {st.session_state['average_score']:.2f}")
+                    elif tab_name.strip("🟢 ") == "Ошибки менеджера":
+                        st.write(st.session_state['manager_errors'])
+                    elif tab_name.strip("🟢 ") == "Рекомендации":
+                        st.write(st.session_state['manager_recommendations'])
+                    elif tab_name.strip("🟢 ") == "Вопросы клиента":
+                        st.write(st.session_state['client_questions'])
 
         # Отображение уведомления о сохранении данных
         if st.session_state.get('save_success') is not None:
