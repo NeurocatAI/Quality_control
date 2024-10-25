@@ -12,7 +12,7 @@ def save_to_google_sheets(
     improvement_recommendations=None,
     client_questions=None
 ):
-    url = 'https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec'  # Укажите ваш URL скрипта
+    url = 'https://script.google.com/macros/s/AKfycbzCkT2sYTvXhBZL4NAy5Cj-ZhZFMOcc70Hz7eICUTkzY-Q3Bebr196CRSd8AcN-LWc/exec'  # Укажите ваш URL скрипта
     data = {
         'unique_id': unique_id,
         'file_name': file_name,
