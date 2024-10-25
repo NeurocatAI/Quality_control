@@ -1,13 +1,30 @@
 # app.py
 import streamlit as st
 import openai
-from config import OPENAI_API_KEY
+import os
+# from config import OPENAI_API_KEY
+# from config import USER_PIN
 from utils.transcription import transcribe_audio
 from utils.dialogue_formatting import format_dialogue
 from utils.quality_control import quality_control
 from utils.error_detection import detect_errors
 from utils.recommendations import generate_recommendations
 from utils.client_questions import extract_client_questions
+import tempfile
+
+# Получение PIN-кода и ключа API из секретов
+USER_PIN = os.getenv("USER_PIN")
+
+
+# Запрос PIN-кода у пользователя
+pin = st.text_input("Введите PIN для доступа", type="password")
+
+# Проверка PIN-кода
+if pin != USER_PIN:
+    st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
+    st.stop()
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Установка API-ключа
 openai.api_key = OPENAI_API_KEY
@@ -19,9 +36,14 @@ audio_file = st.file_uploader("Загрузите аудиофайл", type=["mp
 
 if audio_file is not None:
     if st.button("Начать анализ"):
+        # Сохраняем загруженный файл во временной директории
+        with tempfile.NamedTemporaryFile(delete=False) as tmp_file:
+            tmp_file.write(audio_file.read())
+            tmp_file_path = tmp_file.name
+        
         # Транскрибирование аудио
         with st.spinner("Транскрибируем аудио..."):
-            transcription = transcribe_audio(audio_file)
+            transcription = transcribe_audio(tmp_file_path)
 
         st.subheader("Транскрипция")
         st.write(transcription)
