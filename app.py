@@ -33,8 +33,7 @@ if not st.session_state['access_granted']:
 else:
     # Остальной код приложения
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-    st.write(f"Загруженный API-ключ: {OPENAI_API_KEY[:18]}...")  # Покажет первые 18 символов ключа
-
+   
     # Установка API-ключа
     openai.api_key = OPENAI_API_KEY
 
