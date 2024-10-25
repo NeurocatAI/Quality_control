@@ -14,22 +14,26 @@ import tempfile
 # Получение PIN-кода и ключа API из секретов
 USER_PIN = st.secrets["USER_PIN"]
 
-# Проверяем, введен ли корректный PIN в сессии
+# Проверяем, установлен ли флаг доступа в сессии
 if 'access_granted' not in st.session_state:
     st.session_state['access_granted'] = False
 
+# Если доступ не предоставлен, показываем форму ввода PIN-кода
 if not st.session_state['access_granted']:
-    pin = st.text_input("Введите PIN для доступа", type="password")
-    if pin:
-        if pin == USER_PIN:
-            st.session_state['access_granted'] = True
-            st.success("Доступ разрешен")
-            st.experimental_rerun()  # Перезапускаем приложение
-        else:
-            st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
-            st.stop()
-    else:
-        st.stop()
+    with st.form(key='pin_form'):
+        pin = st.text_input("Введите PIN для доступа", type="password")
+        submit_button = st.form_submit_button("Войти")
+        if submit_button:
+            if pin == USER_PIN:
+                st.session_state['access_granted'] = True
+                st.success("Доступ разрешен")
+                # Нет необходимости вызывать st.experimental_rerun()
+            else:
+                st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
+                # Здесь можно добавить st.stop(), чтобы остановить выполнение
+                st.stop()
+    # Останавливаем выполнение, если форма не отправлена или доступ не предоставлен
+    st.stop()
 else:
     # Остальной код приложения
     OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -84,7 +88,7 @@ else:
             13. Упомянул ли менеджер партнерскую программу. Оценка "1" - да, партнерская программа упомянута, оценка "0" - нет, программа не упомянута.
             """
 
-            # Контроль качества
+           # Контроль качества
             with st.spinner("Проводим контроль качества..."):
                 qc_analysis, scores = quality_control(formatted_dialogue, criteria)
 
