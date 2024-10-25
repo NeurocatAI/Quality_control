@@ -1,4 +1,4 @@
-# app.py
+# app.py 
 import streamlit as st
 import openai
 import os
@@ -27,13 +27,10 @@ if not st.session_state['access_granted']:
         if pin == USER_PIN:
             st.session_state['access_granted'] = True
             st.success("Доступ разрешен")
-            # Нет необходимости вызывать st.experimental_rerun()
         else:
             st.warning("Неверный PIN. Пожалуйста, попробуйте снова.")
-            # Останавливаем выполнение, чтобы не показывать остальной код
             st.stop()
     else:
-        # Останавливаем выполнение, пока форма не отправлена
         st.stop()
 
 # Если доступ предоставлен, показываем остальную часть приложения
@@ -59,19 +56,27 @@ if st.session_state['access_granted']:
             # Получаем имя файла
             file_name = audio_file.name
 
-            # Транскрибирование аудио
+            # Инициализация статусов вкладок
+            tab_statuses = {
+                "Транскрипция": "in_progress",
+                "Диалог": "not_started",
+                "Анализ качества и оценки": "not_started",
+                "Ошибки менеджера": "not_started",
+                "Рекомендации": "not_started",
+                "Вопросы клиента": "not_started"
+            }
+
+            # Выполняем транскрипцию
             with st.spinner("Транскрибируем аудио..."):
                 transcription = transcribe_audio(tmp_file_path)
+                tab_statuses["Транскрипция"] = "completed"
+                tab_statuses["Диалог"] = "in_progress"
 
-            st.subheader("Транскрипция")
-            st.write(transcription)
-
-            # Форматирование диалога
+            # Форматируем диалог
             with st.spinner("Форматируем диалог..."):
                 formatted_dialogue = format_dialogue(transcription)
-
-            st.subheader("Диалог")
-            st.write(formatted_dialogue)
+                tab_statuses["Диалог"] = "completed"
+                tab_statuses["Анализ качества и оценки"] = "in_progress"
             
             # Критерии оценки
             criteria = """
@@ -91,42 +96,31 @@ if st.session_state['access_granted']:
             13. Упомянул ли менеджер партнерскую программу. Оценка "1" - да, партнерская программа упомянута, оценка "0" - нет, программа не упомянута.
             """
 
-            # Контроль качества
+           # Контроль качества
             with st.spinner("Проводим контроль качества..."):
                 qc_analysis, scores = quality_control(formatted_dialogue, criteria)
-
-                # Рассчитываем средний балл
-                if scores:
-                    average_score = sum(scores) / len(scores)
-                else:
-                    average_score = 0
-
-            st.subheader("Анализ качества")
-            st.write(qc_analysis)
-            st.write(f"**Средний балл:** {average_score:.2f}")
+                average_score = sum(scores) / len(scores) if scores else 0
+                tab_statuses["Анализ качества и оценки"] = "completed"
+                tab_statuses["Ошибки менеджера"] = "in_progress"
 
             # Определение ошибок
             with st.spinner("Определяем ошибки менеджера..."):
                 manager_errors = detect_errors(formatted_dialogue)
-
-            st.subheader("Ошибки менеджера")
-            st.write(manager_errors)
+                tab_statuses["Ошибки менеджера"] = "completed"
+                tab_statuses["Рекомендации"] = "in_progress"
 
             # Рекомендации
             with st.spinner("Формируем рекомендации..."):
                 manager_recommendations = generate_recommendations(formatted_dialogue)
-
-            st.subheader("Рекомендации для менеджера")
-            st.write(manager_recommendations)
+                tab_statuses["Рекомендации"] = "completed"
+                tab_statuses["Вопросы клиента"] = "in_progress"
 
             # Вопросы клиента
             with st.spinner("Извлекаем вопросы клиента..."):
                 client_questions = extract_client_questions(formatted_dialogue)
+                tab_statuses["Вопросы клиента"] = "completed"
 
-            st.subheader("Вопросы клиента")
-            st.write(client_questions)
-
-            # Сохранение данных в Google Таблицу
+            # Сохраняем данные в Google Таблицу
             with st.spinner("Сохраняем данные в Google Таблицу..."):
                 success = save_to_google_sheets(
                     file_name=file_name,
@@ -137,6 +131,44 @@ if st.session_state['access_granted']:
                     improvement_recommendations=manager_recommendations,
                     client_questions=client_questions
                 )
+
+            # Обновляем названия вкладок с учетом статусов
+            status_emojis = {
+                "completed": "🟢",
+                "in_progress": "🔵",
+                "not_started": "⚪"
+            }
+            tab_labels = [f"{status_emojis[tab_statuses[tab]]} {tab}" for tab in tab_statuses]
+
+            # Создаем вкладки
+            tabs = st.tabs(tab_labels)
+
+            # Отображаем содержимое в каждой вкладке
+            with tabs[0]:
+                st.subheader("Транскрипция")
+                st.write(transcription)
+
+            with tabs[1]:
+                st.subheader("Диалог")
+                st.write(formatted_dialogue)
+
+            with tabs[2]:
+                st.subheader("Анализ качества и оценки")
+                st.write(qc_analysis)
+                st.write(f"**Средний балл:** {average_score:.2f}")
+
+            with tabs[3]:
+                st.subheader("Ошибки менеджера")
+                st.write(manager_errors)
+
+            with tabs[4]:
+                st.subheader("Рекомендации")
+                st.write(manager_recommendations)
+
+            with tabs[5]:
+                st.subheader("Вопросы клиента")
+                st.write(client_questions)
+                # Размещаем уведомление о сохранении данных
                 if success:
                     st.success("Данные успешно сохранены в Google Таблицу.")
                 else:
